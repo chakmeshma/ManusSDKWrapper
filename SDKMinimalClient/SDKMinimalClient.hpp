@@ -10,6 +10,7 @@
 
 #include "ManusSDK.h"
 #include <mutex>
+#include <array>
 #include <vector>
 
 /// @brief Values that can be returned by this application.
@@ -59,11 +60,15 @@ public:
 	ClientReturnCode InitializeSDK();
 	ClientReturnCode ShutDown();
 	ClientReturnCode RegisterAllCallbacks();
-	void Run();
+	bool Run();
 
-	static void OnConnectedCallback(const ManusHost* const p_Host);
+	//static void OnConnectedCallback(const ManusHost* const p_Host);
+
+	std::array<ManusTransform, 21> GetData();
 
 	static void OnSkeletonStreamCallback(const SkeletonStreamInfo* const p_SkeletonStreamInfo);
+
+	static SDKMinimalClient* s_Instance;
 
 protected:
 
@@ -74,7 +79,6 @@ protected:
 	NodeSetup CreateNodeSetup(uint32_t p_Id, uint32_t p_ParentId, float p_PosX, float p_PosY, float p_PosZ, std::string p_Name);
 	static ManusVec3 CreateManusVec3(float p_X, float p_Y, float p_Z);
 
-	static SDKMinimalClient* s_Instance;
 	bool m_Running = true;
 
 	std::mutex m_SkeletonMutex;

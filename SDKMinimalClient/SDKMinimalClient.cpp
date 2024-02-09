@@ -9,19 +9,24 @@
 
 SDKMinimalClient* SDKMinimalClient::s_Instance = nullptr;
 
-int main()
+extern "C" __declspec(dllexport) bool StartAndRun()
 {
-    std::cout << "Starting minimal client!\n";
-    SDKMinimalClient t_Client;
-    t_Client.Initialize();
-    std::cout << "minimal client is initialized.\n";
+	SDKMinimalClient* t_Client = new SDKMinimalClient;
 
-    // SDK is setup. so now go to main loop of the program.
-    t_Client.Run();
+	if (t_Client->Initialize() == ClientReturnCode::ClientReturnCode_Success && t_Client->Run())
+		return true;
+	else
+		return false;
+}
 
-    // loop is over. disconnect it all
-    std::cout << "minimal client is done, shutting down.\n";
-    t_Client.ShutDown();
+extern "C" __declspec(dllexport) void GetData(std::array<ManusTransform, 21>& nodes) {
+	nodes = SDKMinimalClient::s_Instance->GetData();
+}
+
+extern "C" __declspec(dllexport) void ShutDown()
+{
+	SDKMinimalClient::s_Instance->ShutDown();
+	delete SDKMinimalClient::s_Instance;
 }
 
 SDKMinimalClient::SDKMinimalClient()
@@ -118,43 +123,30 @@ ClientReturnCode SDKMinimalClient::RegisterAllCallbacks()
 }
 
 /// @brief main loop
-void SDKMinimalClient::Run()
+bool SDKMinimalClient::Run()
 {
-	// first loop until we get a connection locally
-	std::cout << "minimal client is connecting to local host. (make sure it is running)\n";
-	while (ConnectLocally() != ClientReturnCode::ClientReturnCode_Success)
+	uint16_t counter = 0;
+	bool bConnected = false;
+
+	while (counter < 2)
 	{
-		// not yet connected. wait
-		std::cout << "minimal client could not connect.trying again in a second.\n";
+		bConnected = ConnectLocally() == ClientReturnCode::ClientReturnCode_Success;
+
+		if (bConnected)
+			break;
+
 		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-	}
-	std::cout << "minimal client is connected, setting up skeletons.\n";
-	// then upload a simple skeleton with a chain. this will just be a left hand for the first userindex.
-	LoadTestSkeleton();
 
-	// then loop and get its data while waiting for escape key to end it
-	while (m_Running)
+		counter++;
+	}
+
+	if (bConnected)
 	{
-		// check if there is new data. otherwise we just wait.
-		m_SkeletonMutex.lock();
-		if (m_NextSkeleton != nullptr)
-		{
-			if (m_Skeleton != nullptr)delete m_Skeleton;
-			m_Skeleton = m_NextSkeleton;
-			m_NextSkeleton = nullptr;
-		}
-		m_SkeletonMutex.unlock();
-
-		if (m_Skeleton != nullptr && m_Skeleton->skeletons.size() != 0)
-		{
-			// print update
-			/*std::cout << "skeleton data obtained for frame: " << std::to_string(m_FrameCounter) << ".\n";
-			m_FrameCounter++;*/
-		}
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(33)); // or roughly 30fps, but good enough to show the results.
+		LoadTestSkeleton();
+		return true;
 	}
-	// then exit.
+	else
+		return false;
 }
 
 /// @brief the client will now try to connect to manus core via the SDK.
@@ -178,7 +170,7 @@ ClientReturnCode SDKMinimalClient::ConnectLocally()
 		return ClientReturnCode::ClientReturnCode_FailedToFindHosts;
 	}
 
-	std::unique_ptr<ManusHost[]> t_AvailableHosts; 
+	std::unique_ptr<ManusHost[]> t_AvailableHosts;
 	t_AvailableHosts.reset(new ManusHost[t_NumberOfHostsFound]);
 
 	SDKReturnCode t_HostsResult = CoreSdk_GetAvailableHostsFound(t_AvailableHosts.get(), t_NumberOfHostsFound);
@@ -194,7 +186,7 @@ ClientReturnCode SDKMinimalClient::ConnectLocally()
 		return ClientReturnCode::ClientReturnCode_FailedToConnect;
 	}
 
-	return ClientReturnCode::ClientReturnCode_Success;	
+	return ClientReturnCode::ClientReturnCode_Success;
 }
 
 
@@ -440,6 +432,30 @@ bool SDKMinimalClient::SetupHandChains(uint32_t p_SklIndex)
 		}
 	}
 	return true;
+}
+
+std::array<ManusTransform, 21> SDKMinimalClient::GetData()
+{
+	std::array<ManusTransform, 21> returnData{};
+
+	// check if there is new data. otherwise we just wait.
+	m_SkeletonMutex.lock();
+	if (m_NextSkeleton != nullptr)
+	{
+		if (m_Skeleton != nullptr)delete m_Skeleton;
+		m_Skeleton = m_NextSkeleton;
+		m_NextSkeleton = nullptr;
+	}
+	m_SkeletonMutex.unlock();
+
+	if (m_Skeleton != nullptr && m_Skeleton->skeletons.size() != 0)
+	{
+		for (uint16_t i = 0; i < m_Skeleton->skeletons[0].info.nodesCount; i++) {
+			returnData[i] = m_Skeleton->skeletons[0].nodes[i].transform;
+		}
+	}
+
+	return returnData;
 }
 
 /// @brief This gets called when the client is connected to manus core
