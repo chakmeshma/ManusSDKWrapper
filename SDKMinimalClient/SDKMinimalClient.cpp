@@ -19,7 +19,7 @@ extern "C" __declspec(dllexport) bool StartAndRun()
 		return false;
 }
 
-extern "C" __declspec(dllexport) void GetData(std::array<ManusTransform, 21>& nodes) {
+extern "C" __declspec(dllexport) void GetData(std::array<ManusTransform, 42>&nodes) {
 	nodes = SDKMinimalClient::s_Instance->GetData();
 }
 
@@ -27,6 +27,18 @@ extern "C" __declspec(dllexport) void ShutDown()
 {
 	SDKMinimalClient::s_Instance->ShutDown();
 	delete SDKMinimalClient::s_Instance;
+}
+
+int main() {
+	if (StartAndRun()) {
+		std::array<ManusTransform, 42> nodes{};
+
+		while (true) {
+			GetData(nodes);
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+	}
 }
 
 SDKMinimalClient::SDKMinimalClient()
@@ -198,35 +210,70 @@ ClientReturnCode SDKMinimalClient::ConnectLocally()
 /// we will not be applying the returned data on anything.
 void SDKMinimalClient::LoadTestSkeleton()
 {
-	uint32_t t_SklIndex = 0;
-
-	SkeletonSetupInfo t_SKL;
-	SkeletonSetupInfo_Init(&t_SKL);
-	t_SKL.type = SkeletonType::SkeletonType_Hand;
-	t_SKL.settings.scaleToTarget = true;
-	t_SKL.settings.targetType = SkeletonTargetType::SkeletonTargetType_UserIndexData;
-	//If the glove does not exist then the added skeleton will not be animated.
-	//Same goes for any other skeleton made for invalid users/gloves.
-	t_SKL.settings.skeletonTargetUserIndexData.userIndex = 0; // just take the first index. make sure this matches in the landscape. 
-
-	strcpy_s(t_SKL.name, sizeof(t_SKL.name), std::string("LeftHand").c_str());
-
-	SDKReturnCode t_Res = CoreSdk_CreateSkeletonSetup(t_SKL, &t_SklIndex);
-	if (t_Res != SDKReturnCode::SDKReturnCode_Success)
 	{
-		return;
+		uint32_t t_SklIndex = 0;
+
+		SkeletonSetupInfo t_SKL;
+		SkeletonSetupInfo_Init(&t_SKL);
+		t_SKL.type = SkeletonType::SkeletonType_Hand;
+		t_SKL.settings.scaleToTarget = true;
+		t_SKL.settings.targetType = SkeletonTargetType::SkeletonTargetType_UserIndexData;
+		//If the glove does not exist then the added skeleton will not be animated.
+		//Same goes for any other skeleton made for invalid users/gloves.
+		t_SKL.settings.skeletonTargetUserIndexData.userIndex = 0; // just take the first index. make sure this matches in the landscape. 
+
+		strcpy_s(t_SKL.name, sizeof(t_SKL.name), std::string("LeftHand").c_str());
+
+		SDKReturnCode t_Res = CoreSdk_CreateSkeletonSetup(t_SKL, &t_SklIndex);
+		if (t_Res != SDKReturnCode::SDKReturnCode_Success)
+		{
+			return;
+		}
+
+		// setup nodes and chains for the skeleton hand
+		if (!SetupHandNodes(t_SklIndex)) return;
+		if (!SetupHandChains(t_SklIndex)) return;
+
+		// load skeleton 
+		uint32_t t_ID = 0;
+		t_Res = CoreSdk_LoadSkeleton(t_SklIndex, &t_ID);
+		if (t_Res != SDKReturnCode::SDKReturnCode_Success)
+		{
+			return;
+		}
 	}
 
-	// setup nodes and chains for the skeleton hand
-	if (!SetupHandNodes(t_SklIndex)) return;
-	if (!SetupHandChains(t_SklIndex)) return;
-
-	// load skeleton 
-	uint32_t t_ID = 0;
-	t_Res = CoreSdk_LoadSkeleton(t_SklIndex, &t_ID);
-	if (t_Res != SDKReturnCode::SDKReturnCode_Success)
 	{
-		return;
+		uint32_t t_SklIndex = 1;
+
+		SkeletonSetupInfo t_SKL;
+		SkeletonSetupInfo_Init(&t_SKL);
+		t_SKL.type = SkeletonType::SkeletonType_Hand;
+		t_SKL.settings.scaleToTarget = true;
+		t_SKL.settings.targetType = SkeletonTargetType::SkeletonTargetType_UserIndexData;
+		//If the glove does not exist then the added skeleton will not be animated.
+		//Same goes for any other skeleton made for invalid users/gloves.
+		t_SKL.settings.skeletonTargetUserIndexData.userIndex = 1; // just take the first index. make sure this matches in the landscape. 
+
+		strcpy_s(t_SKL.name, sizeof(t_SKL.name), std::string("RightHand").c_str());
+
+		SDKReturnCode t_Res = CoreSdk_CreateSkeletonSetup(t_SKL, &t_SklIndex);
+		if (t_Res != SDKReturnCode::SDKReturnCode_Success)
+		{
+			return;
+		}
+
+		// setup nodes and chains for the skeleton hand
+		if (!SetupHandNodes(t_SklIndex)) return;
+		if (!SetupHandChains(t_SklIndex)) return;
+
+		// load skeleton 
+		uint32_t t_ID = 0;
+		t_Res = CoreSdk_LoadSkeleton(t_SklIndex, &t_ID);
+		if (t_Res != SDKReturnCode::SDKReturnCode_Success)
+		{
+			return;
+		}
 	}
 }
 
@@ -434,9 +481,9 @@ bool SDKMinimalClient::SetupHandChains(uint32_t p_SklIndex)
 	return true;
 }
 
-std::array<ManusTransform, 21> SDKMinimalClient::GetData()
+std::array<ManusTransform, 42> SDKMinimalClient::GetData()
 {
-	std::array<ManusTransform, 21> returnData{};
+	std::array<ManusTransform, 42> returnData{};
 
 	// check if there is new data. otherwise we just wait.
 	m_SkeletonMutex.lock();
@@ -452,6 +499,12 @@ std::array<ManusTransform, 21> SDKMinimalClient::GetData()
 	{
 		for (uint16_t i = 0; i < m_Skeleton->skeletons[0].info.nodesCount; i++) {
 			returnData[i] = m_Skeleton->skeletons[0].nodes[i].transform;
+		}
+
+		if (m_Skeleton->skeletons.size() > 1) {
+			for (uint16_t i = 0; i < m_Skeleton->skeletons[1].info.nodesCount; i++) {
+				returnData[i + 21] = m_Skeleton->skeletons[1].nodes[i].transform;
+			}
 		}
 	}
 

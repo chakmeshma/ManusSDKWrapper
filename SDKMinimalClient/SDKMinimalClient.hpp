@@ -64,7 +64,7 @@ public:
 
 	//static void OnConnectedCallback(const ManusHost* const p_Host);
 
-	std::array<ManusTransform, 21> GetData();
+	std::array<ManusTransform, 42> GetData();
 
 	static void OnSkeletonStreamCallback(const SkeletonStreamInfo* const p_SkeletonStreamInfo);
 
